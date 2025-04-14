@@ -1,0 +1,63 @@
+import smtplib
+import ssl
+import time
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Настройки почтового хостинга Spaceweb
+smtp_server = "smtp.spaceweb.ru"  # Или ваш конкретный SMTP сервер Spaceweb
+port = 465  # Для SSL
+sender_email = "your_email@yourdomain.ru"  # Замените на ваш email на Spaceweb
+password = "your_password"  # Замените на ваш пароль от почты Spaceweb
+
+# Список получателей (теперь в виде строки)
+recipients_string = """
+recipient1@example.com
+recipient2@example.com
+recipient3@example.com
+"""
+# Преобразуем строку в список, разделяя по символу новой строки
+recipients = [email.strip() for email in recipients_string.splitlines() if email.strip()]
+
+# Текст письма (HTML)
+html = """
+<html>
+<body>
+    <h1>Здравствуйте!</h1>
+    <p>Это тестовое письмо от .</p>
+    <p>С наилучшими пожеланиями,<br>Ваша компания</p>
+</body>
+</html>
+"""
+
+# Параметры массовой рассылки
+subject = "Важное сообщение !"
+delay = 2  # Задержка в секундах между отправками
+
+# Создание SSL контекста
+context = ssl.create_default_context()
+
+try:
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(sender_email, password)
+        print(f"Успешное подключение к {smtp_server}")
+
+        for recipient in recipients:
+            message = MIMEMultipart("alternative")
+            message["Subject"] = subject
+            message["From"] = sender_email
+            message["To"] = recipient
+
+            # Преобразование HTML в MIMEText объект
+            part = MIMEText(html, "html")
+            message.attach(part)
+
+            # Отправка письма
+            server.sendmail(sender_email, recipient, message.as_string())
+            print(f"Отправлено письмо на: {recipient}")
+            time.sleep(delay)
+
+        print("Рассылка завершена!")
+
+except Exception as e:
+    print(f"Ошибка: {e}")
