@@ -1,1 +1,0 @@
-# KILLSCRIPT-S

@@ -1,0 +1,104 @@
+import re
+import smtplib
+import dns.resolver
+import csv
+import os
+import socket
+
+def validate_email_list(email_list, my_email, my_password, my_smtp_server, my_smtp_port, use_sub_hosting=False, sub_smtp_server=None, sub_smtp_port=None, sub_email=None, sub_password=None):
+    """
+    Проверяет список email адресов, используя различные методы валидации.
+
+    Args:
+        email_list (list): Список email адресов для проверки.
+        my_email (str): Email адрес для подключения к SMTP серверу.
+        my_password (str): Пароль для подключения к SMTP серверу.
+        my_smtp_server (str): Адрес SMTP сервера для подключения.
+        my_smtp_port (int): Порт SMTP сервера для подключения.
+        use_sub_hosting (bool): Использовать ли под-хостинг для проверок.
+        sub_smtp_server (str): Адрес SMTP сервера под-хостинга.
+        sub_smtp_port (int): Порт SMTP сервера под-хостинга.
+        sub_email (str): Email адрес для подключения к SMTP серверу под-хостинга.
+        sub_password (str): Пароль для подключения к SMTP серверу под-хостинга.
+
+    Returns:
+        list: Список результатов валидации, где каждый элемент - это словарь с информацией об email адресе и результатах проверки.
+    """
+
+    results = []
+    for email in email_list:
+        is_valid = True
+        reason = ""
+
+        # 1. Проверка формата email
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            is_valid = False
+            reason += "Неверный формат email; "
+
+        # 2. Проверка MX записи домена
+        try:
+            domain = email.split('@')[1]
+            mx_records = dns.resolver.resolve(domain, 'MX')
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout):
+            is_valid = False
+            reason += "MX запись не найдена для домена; "
+        except Exception as e:
+            is_valid = False
+            reason += f"Ошибка при поиске MX записи: {e}; "
+
+        # 3. Проверка SMTP соединения (сначала через основной хостинг)
+        try:
+            server = smtplib.SMTP(my_smtp_server, my_smtp_port, timeout=5)
+            server.starttls()
+            server.login(my_email, my_password)
+            server.sendmail(my_email, [email], 'Subject: Test Email\n\nThis is a test email.')
+            server.quit()
+
+        except smtplib.SMTPRecipientsRefused as e:
+            is_valid = False
+            reason += f"SMTP сервер отклонил получателя: {e}; "
+        except socket.timeout:
+              is_valid = False
+              reason += "Превышено время ожидания соединения SMTP; "
+        except Exception as e:
+            if use_sub_hosting:
+                try:
+                    server = smtplib.SMTP(sub_smtp_server, sub_smtp_port, timeout=5)
+                    server.starttls()
+                    server.login(sub_email, sub_password)
+                    server.sendmail(sub_email, [email], 'Subject: Test Email\n\nThis is a test email.')
+                    server.quit()
+                except Exception as e2:
+                    is_valid = False
+                    reason += f"Основной SMTP ошибка: {e}, Под-хостинг SMTP ошибка: {e2}; "
+            else:
+                is_valid = False
+                reason += f"SMTP ошибка: {e}; "
+
+
+        results.append({"email": email, "is_valid": is_valid, "reason": reason})
+    return results
+
+def save_to_csv(results, filename="email_validation_results.csv"):
+    """
+    Сохраняет результаты валидации в CSV файл на рабочий стол.
+    """
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    filepath = os.path.join(desktop, filename)
+    with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['email', 'is_valid', 'reason']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in results:
+            writer.writerow(row)
+    print(f"Результаты сохранены в файл: {filepath}")
+
+# Пример использования
+# email_list = ["test@example.com", "invalid-email", "valid@gmail.com"] # Можно вставить базу прямо сюда
+# my_email = "your_email@example.com"
+# my_password = "your_password"
+# my_smtp_server = "smtp.example.com"
+# my_smtp_port = 587
+#
+# results = validate_email_list(email_list, my_email, my_password, my_smtp_server, my_smtp_port)
+# save_to_csv(results)
