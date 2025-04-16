@@ -16,7 +16,12 @@ def extract_emails_from_json(json_data):
     emails = set()
     def find_emails(data):
         if isinstance(data, str):
-            emails.update(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z
+            emails.update(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", data))
+        elif isinstance(data, dict):
+            for value in data.values():
+                find_emails(value)
+        elif isinstance(data, list):
+            for item in data:
                 find_emails(item)
     find_emails(json_data)
     return emails
@@ -25,7 +30,9 @@ def extract_emails_from_xml(xml_data):
     emails = set()
     try:
         root = ET.fromstring(xml_data)
-        emails.update(ree}")
+        emails.update(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", ET.tostring(root, encoding='utf8', method='text').decode()))
+    except ET.ParseError as e:
+        logging.error(f"Error parsing XML: {e}")
     return emails
 
 def extract_emails_from_html(html_data):
@@ -94,3 +101,4 @@ if __name__ == "__main__":
         save_to_csv(emails, args.output)
     else:
         logging.info("No emails found or an error occurred.")
+
