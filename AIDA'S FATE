@@ -1,0 +1,96 @@
+GRXXX { AIDA'S FATE }
+
+import requests
+import re
+import csv
+import os
+import logging
+import argparse
+from bs4 import BeautifulSoup
+import xml.etree.ElementTree as ET
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def extract_emails_from_json(json_data):
+    emails = set()
+    def find_emails(data):
+        if isinstance(data, str):
+            emails.update(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z
+                find_emails(item)
+    find_emails(json_data)
+    return emails
+
+def extract_emails_from_xml(xml_data):
+    emails = set()
+    try:
+        root = ET.fromstring(xml_data)
+        emails.update(ree}")
+    return emails
+
+def extract_emails_from_html(html_data):
+    emails = set()
+    soup = BeautifulSoup(html_data, 'html.parser')
+    text = soup.get_text()
+    emails.update(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text))
+    return emails
+
+def extract_emails_from_text(text_data):
+    return set(re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", text_data))
+
+def fetch_emails_from_api(api_url):
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        content_type = response.headers.get('Content-Type', '').lower()
+
+        if 'application/json' in content_type:
+            try:
+                json_data = response.json()
+                emails = extract_emails_from_json(json_data)
+                return emails
+            except json.JSONDecodeError:
+                logging.error("Received non-JSON response from API.")
+                return []
+        elif 'application/xml' in content_type or 'text/xml' in content_type:
+            emails = extract_emails_from_xml(response.text)
+            return emails
+        elif 'text/html' in content_type:
+            emails = extract_emails_from_html(response.text)
+            return emails
+        elif 'text/plain' in content_type:
+            emails = extract_emails_from_text(response.text)
+            return emails
+        else:
+            logging.warning(f"Unexpected Content-Type: {content_type}. Attempting to parse as plain text.")
+            emails = extract_emails_from_text(response.text)
+            return emails
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching {api_url}: {e}")
+        return []
+
+def save_to_csv(emails, filename="emails.csv"):
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    filepath = os.path.join(desktop, filename)
+    try:
+        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['Email'])
+            for email in emails:
+                writer.writerow([email])
+        logging.info(f"Emails saved to {filepath}")
+    except Exception as e:
+        logging.error(f"Error saving to CSV: {e}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Extract emails from an API endpoint.')
+    parser.add_argument("api_url", help="The URL of the API endpoint")
+    parser.add_argument("-o", "--output", default="emails.csv", help="Output filename (default: emails.csv)")
+    args = parser.parse_args()
+
+    emails = fetch_emails_from_api(args.api_url)
+    if emails:
+        save_to_csv(emails, args.output)
+    else:
+        logging.info("No emails found or an error occurred.")
